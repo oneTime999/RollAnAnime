@@ -1,21 +1,23 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerBlocks = LocalPlayer:WaitForChild("Blocks")
 
 local FolderPath = "SlowHub"
 local SubFolderPath = "SlowHub/RollAnAnime"
 local ConfigPath = "SlowHub/RollAnAnime/config.json"
 
-if not isfolder(FolderPath) then
-    makefolder(FolderPath)
-end
-
-if not isfolder(SubFolderPath) then
-    makefolder(SubFolderPath)
-end
+if not isfolder(FolderPath) then makefolder(FolderPath) end
+if not isfolder(SubFolderPath) then makefolder(SubFolderPath) end
 
 local Config = {
     SelectedBlocks = {"CommonBlock"},
-    AutoBuy = false
+    SelectedRollBlocks = {},
+    AutoBuy = false,
+    AutoRoll = false
 }
 
 local function Save()
@@ -25,9 +27,11 @@ end
 local function Load()
     if isfile(ConfigPath) then
         local success, data = pcall(function()
-            local decoded = HttpService:JSONDecode(readfile(ConfigPath))
-            if decoded then Config = decoded end
+            return HttpService:JSONDecode(readfile(ConfigPath))
         end)
+        if success and data then 
+            for i, v in pairs(data) do Config[i] = v end 
+        end
     end
 end
 
@@ -37,20 +41,14 @@ local Window = Rayfield:CreateWindow({
     Name = "Slow Hub | Roll An Anime",
     LoadingTitle = "Slow Hub Team",
     LoadingSubtitle = "by Slow Hub Team",
-    ConfigurationSaving = {
-        Enabled = false
-    },
-    Discord = {
-        Enabled = false,
-        Invite = "",
-        RememberJoins = true
-    },
+    ConfigurationSaving = {Enabled = false},
+    Discord = {Enabled = false, Invite = "", RememberJoins = true},
     KeySystem = false
 })
 
 local MainTab = Window:CreateTab("Main", 4483362458)
 
-local Blocks = {
+local StaticBlocks = {
     "CommonBlock", "UncommonBlock", "RareBlock", "EpicBlock", "LegendaryBlock",
     "MythicBlock", "GalaxyBlock", "QuantumBlock", "AscendantBlock", "DevilBlock",
     "HeavenlyBlock", "MagicBlock", "BrambleBlock", "TimeBenderBlock", "InfinityBlock",
@@ -60,9 +58,11 @@ local Blocks = {
     "HellcoreBlock", "VerdictBlock", "PinnacleBlock"
 }
 
+MainTab:CreateSection("Auto Buy Section")
+
 MainTab:CreateDropdown({
     Name = "Select Blocks to Buy",
-    Options = Blocks,
+    Options = StaticBlocks,
     CurrentOption = Config.SelectedBlocks,
     MultipleOptions = true,
     Callback = function(Options)
@@ -77,18 +77,71 @@ MainTab:CreateToggle({
     Callback = function(Value)
         Config.AutoBuy = Value
         Save()
-        
         if Config.AutoBuy then
             task.spawn(function()
                 while Config.AutoBuy do
                     for _, blockName in ipairs(Config.SelectedBlocks) do
                         if not Config.AutoBuy then break end
                         pcall(function()
-                            game:GetService("ReplicatedStorage").Network.Client.PurchaseItem:InvokeServer(blockName)
+                            ReplicatedStorage.Network.Client.PurchaseItem:InvokeServer(blockName)
                         end)
                         task.wait(0.05)
                     end
-                    task.wait(0.01)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end,
+})
+
+MainTab:CreateSection("Auto Roll Section")
+
+local function GetInventoryList()
+    local list = {}
+    for _, v in pairs(PlayerBlocks:GetChildren()) do
+        if v:IsA("NumberValue") or v:IsA("IntValue") then
+            table.insert(list, v.Name .. " (" .. tostring(v.Value) .. "x)")
+        end
+    end
+    return list
+end
+
+local RollDropdown = MainTab:CreateDropdown({
+    Name = "Select Blocks to Roll",
+    Options = GetInventoryList(),
+    CurrentOption = {},
+    MultipleOptions = true,
+    Callback = function(Options)
+        Config.SelectedRollBlocks = Options
+        Save()
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "Refresh Inventory List",
+    Callback = function()
+        RollDropdown:Refresh(GetInventoryList())
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Auto Roll Blocks",
+    CurrentValue = Config.AutoRoll,
+    Callback = function(Value)
+        Config.AutoRoll = Value
+        Save()
+        if Config.AutoRoll then
+            task.spawn(function()
+                while Config.AutoRoll do
+                    for _, formattedName in ipairs(Config.SelectedRollBlocks) do
+                        if not Config.AutoRoll then break end
+                        local realName = string.gsub(formattedName, " %(%d+x%)", "")
+                        pcall(function()
+                            ReplicatedStorage.Network.Client.RollBlock:InvokeServer(realName)
+                        end)
+                        task.wait(0.05)
+                    end
+                    task.wait(0.1)
                 end
             end)
         end
