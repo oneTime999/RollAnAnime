@@ -14,7 +14,7 @@ if not isfolder(FolderPath) then makefolder(FolderPath) end
 if not isfolder(SubFolderPath) then makefolder(SubFolderPath) end
 
 local Config = {
-    SelectedBlocks = {"CommonBlock"},
+    SelectedBlocks = {},
     SelectedRollBlocks = {},
     AutoBuy = false,
     AutoRoll = false
@@ -55,10 +55,21 @@ local StaticBlocks = {
     "KingSunBlock", "OuroborosBlock", "MoltenCoreBlock", "ToxicReactorBlock", "KingsMantleBlock",
     "TheEndBlock", "AetherialBlock", "RadiantBlock", "CelestialEmperorBlock", "PhantomBlock",
     "AnomalyBlock", "VercaBlock", "VortexBlock", "BloodcodeBlock", "DoomBlock",
-    "HellcoreBlock", "VerdictBlock", "PinnacleBlock"
+    "HellcorellBlock", "VerdictBlock", "PinnacleBlock"
 }
 
-MainTab:CreateSection("Auto Buy Section")
+local function GetInventoryList()
+    local list = {}
+    for _, name in ipairs(StaticBlocks) do
+        local obj = PlayerBlocks:FindFirstChild(name)
+        if obj and (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value > 0 then
+            table.insert(list, name .. " (" .. tostring(obj.Value) .. "x)")
+        end
+    end
+    return list
+end
+
+MainTab:CreateSection("Auto Buy Blocks")
 
 MainTab:CreateDropdown({
     Name = "Select Blocks to Buy",
@@ -94,17 +105,7 @@ MainTab:CreateToggle({
     end,
 })
 
-MainTab:CreateSection("Auto Roll Section")
-
-local function GetInventoryList()
-    local list = {}
-    for _, v in pairs(PlayerBlocks:GetChildren()) do
-        if v:IsA("NumberValue") or v:IsA("IntValue") then
-            table.insert(list, v.Name .. " (" .. tostring(v.Value) .. "x)")
-        end
-    end
-    return list
-end
+MainTab:CreateSection("Auto Roll Blocks")
 
 local RollDropdown = MainTab:CreateDropdown({
     Name = "Select Blocks to Roll",
