@@ -75,14 +75,15 @@ end
 
 local function GetMyPlot()
     local container = workspace:FindFirstChild("Plots") and workspace.Plots:FindFirstChild("4")
-    if container then
-        for _, plot in pairs(container:GetChildren()) do
-            local ownerObj = plot:FindFirstChild("Owner")
-            if ownerObj and tonumber(ownerObj.Value) == LocalPlayer.UserId then
-                return plot
-            end
+    if not container then warn("[DEBUG] workspace.Plots['4'] not found") return nil end
+    
+    for _, plot in pairs(container:GetChildren()) do
+        local ownerObj = plot:FindFirstChild("Owner")
+        if ownerObj and (tostring(ownerObj.Value) == tostring(LocalPlayer.UserId) or tostring(ownerObj.Value) == LocalPlayer.Name) then
+            return plot
         end
     end
+    warn("[DEBUG] No plot found for " .. LocalPlayer.Name)
     return nil
 end
 
@@ -100,6 +101,8 @@ local function GetAnimeList()
                 table.insert(list, "[" .. i .. "] " .. name .. " (" .. mut .. ") Lv." .. lv)
             end
         end
+    else
+        warn("[DEBUG] Plots/Slots folder missing")
     end
     return list
 end
@@ -156,7 +159,7 @@ MainTab:CreateButton({
     Callback = function() RollDropdown:Refresh(GetInventoryList()) end,
 })
 
-MainTab:CreateToggle({
+local AutoRollToggle = MainTab:CreateToggle({
     Name = "Auto Roll Blocks",
     CurrentValue = Config.AutoRoll,
     Callback = function(Value)
@@ -165,11 +168,25 @@ MainTab:CreateToggle({
         if Config.AutoRoll then
             task.spawn(function()
                 while Config.AutoRoll do
+                    local foundBlock = false
                     for _, formattedName in ipairs(Config.SelectedRollBlocks) do
                         if not Config.AutoRoll then break end
                         local realName = string.gsub(formattedName, " %(%d+x%)", "")
-                        pcall(function() ReplicatedStorage.Network.Client.RollBlock:InvokeServer(realName) end)
-                        task.wait(0.05)
+                        local blockObj = PlayerBlocks:FindFirstChild(realName)
+                        
+                        if blockObj and blockObj.Value > 0 then
+                            foundBlock = true
+                            pcall(function() ReplicatedStorage.Network.Client.RollBlock:InvokeServer(realName) end)
+                            task.wait(0.05)
+                            break 
+                        end
+                    end
+                    
+                    if not foundBlock then
+                        Config.AutoRoll = false
+                        Save()
+                        Rayfield:Notify({Title = "Auto Roll", Content = "Out of selected blocks! Stopping...", Duration = 5})
+                        break
                     end
                     task.wait(0.1)
                 end
@@ -193,7 +210,13 @@ local UpgradeDropdown = MainTab:CreateDropdown({
 
 MainTab:CreateButton({
     Name = "Refresh Anime List",
-    Callback = function() UpgradeDropdown:Refresh(GetAnimeList()) end,
+    Callback = function() 
+        local list = GetAnimeList()
+        UpgradeDropdown:Refresh(list)
+        if #list == 0 then
+            Rayfield:Notify({Title = "Debug", Content = "No Animes found in your plot slots!", Duration = 5})
+        end
+    end,
 })
 
 MainTab:CreateToggle({
@@ -205,14 +228,18 @@ MainTab:CreateToggle({
         if Config.AutoUpgrade then
             task.spawn(function()
                 while Config.AutoUpgrade do
-                    for _, formatted in ipairs(Config.SelectedUpgradeAnimes) do
-                        if not Config.AutoUpgrade then break end
-                        local slotNum = string.match(formatted, "%[(%d+)%]")
-                        if slotNum then
-                            pcall(function() 
-                                ReplicatedStorage.Network.Client.UpgradeBrainrot:InvokeServer(tostring(slotNum)) 
-                            end)
-                            task.wait(0.1)
+                    if #Config.SelectedUpgradeAnimes == 0 then
+                        task.wait(1)
+                    else
+                        for _, formatted in ipairs(Config.SelectedUpgradeAnimes) do
+                            if not Config.AutoUpgrade then break end
+                            local slotNum = string.match(formatted, "%[(%d+)%]")
+                            if slotNum then
+                                pcall(function() 
+                                    ReplicatedStorage.Network.Client.UpgradeBrainrot:InvokeServer(tostring(slotNum)) 
+                                end)
+                                task.wait(0.1)
+                            end
                         end
                     end
                     task.wait(0.5)
