@@ -108,14 +108,17 @@ local RollToggle = Main:CreateToggle({Name="Auto Roll Blocks",CurrentValue=CFG.A
     CFG.AutoRoll=v Save()
     if not v then return end
     task.spawn(function()
-        for _, fmt in ipairs(CFG.SelectedRollBlocks) do
+        local selected = CFG.SelectedRollBlocks
+        for _, fmt in ipairs(selected) do
             if not CFG.AutoRoll then break end
             local name = ParseBlock(fmt)
             local obj = Blocks:FindFirstChild(name)
             if not obj then continue end
-            while CFG.AutoRoll and obj.Value > 0 do
-                pcall(Net.RollBlock.InvokeServer, Net.RollBlock, name)
-                task.wait(0.05)
+            while CFG.AutoRoll do
+                local count = obj.Value
+                if count <= 0 then break end
+                pcall(function() Net.RollBlock:InvokeServer(name) end)
+                task.wait(0.1)
             end
         end
         if CFG.AutoRoll then
@@ -151,7 +154,7 @@ end})
 
 -- Misc
 Misc:CreateSection("Economy")
-Misc:CreateToggle({Name="Auto Collect Cash",CurrentValue=CFG.AutoCollect,Callback=function(v)
+Misc:CreateToggle({Name="Auto Collect Cash (1-24)",CurrentValue=CFG.AutoCollect,Callback=function(v)
     CFG.AutoCollect=v Save()
     if not v then return end
     task.spawn(function()
