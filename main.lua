@@ -16,8 +16,11 @@ if not isfolder(SubFolderPath) then makefolder(SubFolderPath) end
 local Config = {
     SelectedBlocks = {},
     SelectedRollBlocks = {},
+    SelectedUpgradeAnimes = {},
     AutoBuy = false,
-    AutoRoll = false
+    AutoRoll = false,
+    AutoCollect = false,
+    AutoUpgrade = false
 }
 
 local function Save()
@@ -47,6 +50,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 local MainTab = Window:CreateTab("Main", 4483362458)
+local MiscTab = Window:CreateTab("Misc", 4483362458)
 
 local StaticBlocks = {
     "CommonBlock", "UncommonBlock", "RareBlock", "EpicBlock", "LegendaryBlock",
@@ -62,8 +66,39 @@ local function GetInventoryList()
     local list = {}
     for _, name in ipairs(StaticBlocks) do
         local obj = PlayerBlocks:FindFirstChild(name)
-        if obj and (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value > 0 then
+        if obj and obj.Value > 0 then
             table.insert(list, name .. " (" .. tostring(obj.Value) .. "x)")
+        end
+    end
+    return list
+end
+
+local function GetMyPlot()
+    local plots = workspace:FindFirstChild("Plots") and workspace.Plots:FindFirstChild("4")
+    if plots then
+        for i = 1, 8 do
+            local plot = plots:FindFirstChild(tostring(i))
+            if plot and plot:FindFirstChild("Owner") and (tostring(plot.Owner.Value) == LocalPlayer.Name or tostring(plot.Owner.Value) == tostring(LocalPlayer.UserId)) then
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
+local function GetAnimeList()
+    local list = {}
+    local plot = GetMyPlot()
+    if plot and plot:FindFirstChild("Slots") then
+        for i = 1, 24 do
+            local slot = plot.Slots:FindFirstChild(tostring(i))
+            local model = slot and slot:FindFirstChildOfClass("Model")
+            if model then
+                local name = model:GetAttribute("EntityName") or "Unknown"
+                local mut = model:GetAttribute("Mutation") or "None"
+                local lv = model:GetAttribute("UpgradeLevel") or 0
+                table.insert(list, "[" .. tostring(i) .. "] " .. name .. " " .. mut .. " Lv. " .. tostring(lv))
+            end
         end
     end
     return list
@@ -143,6 +178,77 @@ MainTab:CreateToggle({
                         task.wait(0.05)
                     end
                     task.wait(0.1)
+                end
+            end)
+        end
+    end,
+})
+
+MainTab:CreateSection("Auto Upgrade Anime")
+
+local UpgradeDropdown = MainTab:CreateDropdown({
+    Name = "Select Animes to Upgrade",
+    Options = GetAnimeList(),
+    CurrentOption = {},
+    MultipleOptions = true,
+    Callback = function(Options)
+        Config.SelectedUpgradeAnimes = Options
+        Save()
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "Refresh Anime List",
+    Callback = function()
+        UpgradeDropdown:Refresh(GetAnimeList())
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Auto Upgrade Anime",
+    CurrentValue = Config.AutoUpgrade,
+    Callback = function(Value)
+        Config.AutoUpgrade = Value
+        Save()
+        if Config.AutoUpgrade then
+            task.spawn(function()
+                while Config.AutoUpgrade do
+                    for _, formatted in ipairs(Config.SelectedUpgradeAnimes) do
+                        if not Config.AutoUpgrade then break end
+                        local slotNum = string.match(formatted, "%[(%d+)%]")
+                        if slotNum then
+                            pcall(function()
+                                ReplicatedStorage.Network.Client.UpgradeBrainrot:InvokeServer(slotNum)
+                            end)
+                            task.wait(0.05)
+                        end
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end,
+})
+
+MiscTab:CreateSection("Economy")
+
+MiscTab:CreateToggle({
+    Name = "Auto Collect Cash (1-24)",
+    CurrentValue = Config.AutoCollect,
+    Callback = function(Value)
+        Config.AutoCollect = Value
+        Save()
+        if Config.AutoCollect then
+            task.spawn(function()
+                while Config.AutoCollect do
+                    for i = 1, 24 do
+                        if not Config.AutoCollect then break end
+                        pcall(function()
+                            ReplicatedStorage.Network.Client.ClaimCash:FireServer(tostring(i))
+                        end)
+                        task.wait(0.02)
+                    end
+                    task.wait(0.5)
                 end
             end)
         end
