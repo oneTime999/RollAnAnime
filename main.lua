@@ -59,7 +59,7 @@ local StaticBlocks = {
     "KingSunBlock", "OuroborosBlock", "MoltenCoreBlock", "ToxicReactorBlock", "KingsMantleBlock",
     "TheEndBlock", "AetherialBlock", "RadiantBlock", "CelestialEmperorBlock", "PhantomBlock",
     "AnomalyBlock", "VercaBlock", "VortexBlock", "BloodcodeBlock", "DoomBlock",
-    "HellcorellBlock", "VerdictBlock", "PinnacleBlock"
+    "HellcoreBlock", "VerdictBlock", "PinnacleBlock"
 }
 
 local function GetInventoryList()
@@ -67,18 +67,18 @@ local function GetInventoryList()
     for _, name in ipairs(StaticBlocks) do
         local obj = PlayerBlocks:FindFirstChild(name)
         if obj and obj.Value > 0 then
-            table.insert(list, name .. " (" .. tostring(obj.Value) .. "x)")
+            table.insert(list, name .. " (" .. obj.Value .. "x)")
         end
     end
     return list
 end
 
 local function GetMyPlot()
-    local plots = workspace:FindFirstChild("Plots") and workspace.Plots:FindFirstChild("4")
-    if plots then
-        for i = 1, 8 do
-            local plot = plots:FindFirstChild(tostring(i))
-            if plot and plot:FindFirstChild("Owner") and (tostring(plot.Owner.Value) == LocalPlayer.Name or tostring(plot.Owner.Value) == tostring(LocalPlayer.UserId)) then
+    local container = workspace:FindFirstChild("Plots") and workspace.Plots:FindFirstChild("4")
+    if container then
+        for _, plot in pairs(container:GetChildren()) do
+            local ownerObj = plot:FindFirstChild("Owner")
+            if ownerObj and tonumber(ownerObj.Value) == LocalPlayer.UserId then
                 return plot
             end
         end
@@ -97,7 +97,7 @@ local function GetAnimeList()
                 local name = model:GetAttribute("EntityName") or "Unknown"
                 local mut = model:GetAttribute("Mutation") or "None"
                 local lv = model:GetAttribute("UpgradeLevel") or 0
-                table.insert(list, "[" .. tostring(i) .. "] " .. name .. " " .. mut .. " Lv. " .. tostring(lv))
+                table.insert(list, "[" .. i .. "] " .. name .. " (" .. mut .. ") Lv." .. lv)
             end
         end
     end
@@ -128,9 +128,7 @@ MainTab:CreateToggle({
                 while Config.AutoBuy do
                     for _, blockName in ipairs(Config.SelectedBlocks) do
                         if not Config.AutoBuy then break end
-                        pcall(function()
-                            ReplicatedStorage.Network.Client.PurchaseItem:InvokeServer(blockName)
-                        end)
+                        pcall(function() ReplicatedStorage.Network.Client.PurchaseItem:InvokeServer(blockName) end)
                         task.wait(0.05)
                     end
                     task.wait(0.1)
@@ -155,9 +153,7 @@ local RollDropdown = MainTab:CreateDropdown({
 
 MainTab:CreateButton({
     Name = "Refresh Inventory List",
-    Callback = function()
-        RollDropdown:Refresh(GetInventoryList())
-    end,
+    Callback = function() RollDropdown:Refresh(GetInventoryList()) end,
 })
 
 MainTab:CreateToggle({
@@ -172,9 +168,7 @@ MainTab:CreateToggle({
                     for _, formattedName in ipairs(Config.SelectedRollBlocks) do
                         if not Config.AutoRoll then break end
                         local realName = string.gsub(formattedName, " %(%d+x%)", "")
-                        pcall(function()
-                            ReplicatedStorage.Network.Client.RollBlock:InvokeServer(realName)
-                        end)
+                        pcall(function() ReplicatedStorage.Network.Client.RollBlock:InvokeServer(realName) end)
                         task.wait(0.05)
                     end
                     task.wait(0.1)
@@ -199,9 +193,7 @@ local UpgradeDropdown = MainTab:CreateDropdown({
 
 MainTab:CreateButton({
     Name = "Refresh Anime List",
-    Callback = function()
-        UpgradeDropdown:Refresh(GetAnimeList())
-    end,
+    Callback = function() UpgradeDropdown:Refresh(GetAnimeList()) end,
 })
 
 MainTab:CreateToggle({
@@ -217,13 +209,13 @@ MainTab:CreateToggle({
                         if not Config.AutoUpgrade then break end
                         local slotNum = string.match(formatted, "%[(%d+)%]")
                         if slotNum then
-                            pcall(function()
-                                ReplicatedStorage.Network.Client.UpgradeBrainrot:InvokeServer(slotNum)
+                            pcall(function() 
+                                ReplicatedStorage.Network.Client.UpgradeBrainrot:InvokeServer(tostring(slotNum)) 
                             end)
-                            task.wait(0.05)
+                            task.wait(0.1)
                         end
                     end
-                    task.wait(0.1)
+                    task.wait(0.5)
                 end
             end)
         end
@@ -233,7 +225,7 @@ MainTab:CreateToggle({
 MiscTab:CreateSection("Economy")
 
 MiscTab:CreateToggle({
-    Name = "Auto Collect Cash (1-24)",
+    Name = "Auto Collect Cash",
     CurrentValue = Config.AutoCollect,
     Callback = function(Value)
         Config.AutoCollect = Value
@@ -243,12 +235,10 @@ MiscTab:CreateToggle({
                 while Config.AutoCollect do
                     for i = 1, 24 do
                         if not Config.AutoCollect then break end
-                        pcall(function()
-                            ReplicatedStorage.Network.Client.ClaimCash:FireServer(tostring(i))
-                        end)
-                        task.wait(0.02)
+                        pcall(function() ReplicatedStorage.Network.Client.ClaimCash:FireServer(tostring(i)) end)
+                        task.wait(0.05)
                     end
-                    task.wait(0.5)
+                    task.wait(1)
                 end
             end)
         end
