@@ -2,6 +2,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
 
 local LP = Players.LocalPlayer
 local Blocks = LP:WaitForChild("Blocks")
@@ -12,7 +13,7 @@ if not isfolder("SlowHub/RollAnAnime") then makefolder("SlowHub/RollAnAnime") en
 
 local CFG = {
     SelectedBlocks = {}, SelectedRollBlocks = {}, SelectedUpgradeAnimes = {},
-    AutoBuy = false, AutoRoll = false, AutoCollect = false, AutoCollectIndex = false, AutoUpgrade = false
+    AutoBuy = false, AutoRoll = false, AutoCollect = false, AutoCollectIndex = false, AutoUpgrade = false, AntiAfk = false
 }
 
 local function Save() writefile("SlowHub/RollAnAnime/config.json", HttpService:JSONEncode(CFG)) end
@@ -74,6 +75,74 @@ end
 local function ParseBlock(s) return s:match("^(.-)%s*%(") or s end
 local function ParseSlot(s) return s:match("^%[(%d+)%]") end
 
+-- Loop starters (definidas antes dos toggles para poder chamar no boot)
+local function StartAutoBuy()
+    task.spawn(function()
+        while CFG.AutoBuy do
+            for _, b in ipairs(CFG.SelectedBlocks) do
+                if not CFG.AutoBuy then break end
+                pcall(function() Net.PurchaseItem:InvokeServer(b) end)
+                task.wait(0.05)
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function StartAutoCollect()
+    task.spawn(function()
+        while CFG.AutoCollect do
+            for i = 1, 24 do
+                if not CFG.AutoCollect then break end
+                pcall(function() Net.ClaimCash:FireServer(tostring(i)) end)
+                task.wait(0.05)
+            end
+            task.wait(1)
+        end
+    end)
+end
+
+local function StartAutoCollectIndex()
+    task.spawn(function()
+        while CFG.AutoCollectIndex do
+            pcall(function() Net.ClaimAllIndexRewards:FireServer() end)
+            task.wait(1)
+        end
+    end)
+end
+
+local function StartAutoUpgrade()
+    task.spawn(function()
+        while CFG.AutoUpgrade do
+            if #CFG.SelectedUpgradeAnimes == 0 then task.wait(1) continue end
+            for _, fmt in ipairs(CFG.SelectedUpgradeAnimes) do
+                if not CFG.AutoUpgrade then break end
+                local slot = ParseSlot(fmt)
+                if slot then
+                    pcall(function() Net.UpgradeBrainrot:InvokeServer(slot) end)
+                    task.wait(0.1)
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function StartAntiAfk()
+    task.spawn(function()
+        while CFG.AntiAfk do
+            local virt = UIS.VirtualUser
+            if virt then
+                virt:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                task.wait(0.1)
+                virt:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end
+            task.wait(60)
+        end
+    end)
+end
+
+-- UI
 local Win = Rayfield:CreateWindow({
     Name = "Slow Hub | Roll An Anime", LoadingTitle = "Slow Hub Team", LoadingSubtitle = "by Slow Hub Team",
     ConfigurationSaving = {Enabled=false}, Discord = {Enabled=false,Invite="",RememberJoins=true}, KeySystem = false
@@ -87,41 +156,34 @@ Main:CreateSection("Auto Buy Blocks")
 Main:CreateDropdown({Name="Select Blocks to Buy",Options=StaticBlocks,CurrentOption=CFG.SelectedBlocks,MultipleOptions=true,Callback=function(v) CFG.SelectedBlocks=v Save() end})
 Main:CreateToggle({Name="Auto Buy Blocks",CurrentValue=CFG.AutoBuy,Callback=function(v)
     CFG.AutoBuy=v Save()
-    if not v then return end
-    task.spawn(function()
-        while CFG.AutoBuy do
-            for _, b in ipairs(CFG.SelectedBlocks) do
-                if not CFG.AutoBuy then break end
-                pcall(Net.PurchaseItem.InvokeServer, Net.PurchaseItem, b)
-                task.wait(0.05)
-            end
-            task.wait(0.1)
-        end
-    end)
+    if v then StartAutoBuy() end
 end})
 
 -- Auto Roll
 Main:CreateSection("Auto Roll Blocks")
 local RollDrop = Main:CreateDropdown({Name="Select Blocks to Roll",Options=GetInventory(),CurrentOption={},MultipleOptions=true,Callback=function(v) CFG.SelectedRollBlocks=v Save() end})
 Main:CreateButton({Name="Refresh Inventory",Callback=function() RollDrop:Refresh(GetInventory()) CFG.SelectedRollBlocks={} Save() end})
-local RollToggle = Main:CreateToggle({Name="Auto Roll Blocks",CurrentValue=CFG.AutoRoll,Callback=function(v)
+
+local RollSession = 0
+local RollToggle
+RollToggle = Main:CreateToggle({Name="Auto Roll Blocks",CurrentValue=CFG.AutoRoll,Callback=function(v)
     CFG.AutoRoll=v Save()
     if not v then return end
+    RollSession = RollSession + 1
+    local sid = RollSession
     task.spawn(function()
-        local selected = CFG.SelectedRollBlocks
-        for _, fmt in ipairs(selected) do
-            if not CFG.AutoRoll then break end
+        for _, fmt in ipairs(CFG.SelectedRollBlocks) do
+            if not CFG.AutoRoll or sid ~= RollSession then break end
             local name = ParseBlock(fmt)
             local obj = Blocks:FindFirstChild(name)
             if not obj then continue end
-            while CFG.AutoRoll do
-                local count = obj.Value
-                if count <= 0 then break end
+            while CFG.AutoRoll and sid == RollSession do
+                if obj.Value <= 0 then break end
                 pcall(function() Net.RollBlock:InvokeServer(name) end)
-                task.wait(0.1)
+                task.wait(0.2)
             end
         end
-        if CFG.AutoRoll then
+        if CFG.AutoRoll and sid == RollSession then
             CFG.AutoRoll=false Save() RollToggle:Set(false)
             Rayfield:Notify({Title="Auto Roll",Content="All selected blocks depleted!",Duration=5})
         end
@@ -138,44 +200,30 @@ Main:CreateButton({Name="Refresh Anime List",Callback=function()
 end})
 Main:CreateToggle({Name="Auto Upgrade Anime",CurrentValue=CFG.AutoUpgrade,Callback=function(v)
     CFG.AutoUpgrade=v Save()
-    if not v then return end
-    task.spawn(function()
-        while CFG.AutoUpgrade do
-            if #CFG.SelectedUpgradeAnimes == 0 then task.wait(1) continue end
-            for _, fmt in ipairs(CFG.SelectedUpgradeAnimes) do
-                if not CFG.AutoUpgrade then break end
-                local slot = ParseSlot(fmt)
-                if slot then pcall(Net.UpgradeBrainrot.InvokeServer, Net.UpgradeBrainrot, slot) task.wait(0.1) end
-            end
-            task.wait(0.5)
-        end
-    end)
+    if v then StartAutoUpgrade() end
 end})
 
 -- Misc
 Misc:CreateSection("Economy")
 Misc:CreateToggle({Name="Auto Collect Cash (1-24)",CurrentValue=CFG.AutoCollect,Callback=function(v)
     CFG.AutoCollect=v Save()
-    if not v then return end
-    task.spawn(function()
-        while CFG.AutoCollect do
-            for i = 1, 24 do
-                if not CFG.AutoCollect then break end
-                pcall(Net.ClaimCash.FireServer, Net.ClaimCash, tostring(i))
-                task.wait(0.05)
-            end
-            task.wait(1)
-        end
-    end)
+    if v then StartAutoCollect() end
 end})
 
 Misc:CreateToggle({Name="Auto Collect Index Rewards",CurrentValue=CFG.AutoCollectIndex,Callback=function(v)
     CFG.AutoCollectIndex=v Save()
-    if not v then return end
-    task.spawn(function()
-        while CFG.AutoCollectIndex do
-            pcall(Net.ClaimAllIndexRewards.FireServer, Net.ClaimAllIndexRewards)
-            task.wait(1)
-        end
-    end)
+    if v then StartAutoCollectIndex() end
 end})
+
+Misc:CreateSection("Player")
+Misc:CreateToggle({Name="Anti-AFK",CurrentValue=CFG.AntiAfk,Callback=function(v)
+    CFG.AntiAfk=v Save()
+    if v then StartAntiAfk() end
+end})
+
+-- Boot: reinicia loops que estavam ativos no save
+if CFG.AutoBuy then StartAutoBuy() end
+if CFG.AutoCollect then StartAutoCollect() end
+if CFG.AutoCollectIndex then StartAutoCollectIndex() end
+if CFG.AutoUpgrade then StartAutoUpgrade() end
+if CFG.AntiAfk then StartAntiAfk() end
