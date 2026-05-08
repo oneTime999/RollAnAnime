@@ -2,7 +2,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
-local UIS = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser") -- Corrigido: VirtualUser é um serviço próprio
 
 local LP = Players.LocalPlayer
 local Blocks = LP:WaitForChild("Blocks")
@@ -75,7 +75,19 @@ end
 local function ParseBlock(s) return s:match("^(.-)%s*%(") or s end
 local function ParseSlot(s) return s:match("^%[(%d+)%]") end
 
--- Loop starters (definidas antes dos toggles para poder chamar no boot)
+-- Sistema de Anti-AFK Otimizado (Event-Driven)
+LP.Idled:Connect(function()
+    if CFG.AntiAfk then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        -- Se preferir garantir, pode usar o método anterior corrigido:
+        -- VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        -- task.wait(0.1)
+        -- VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- Loop starters
 local function StartAutoBuy()
     task.spawn(function()
         while CFG.AutoBuy do
@@ -124,20 +136,6 @@ local function StartAutoUpgrade()
                 end
             end
             task.wait(0.5)
-        end
-    end)
-end
-
-local function StartAntiAfk()
-    task.spawn(function()
-        while CFG.AntiAfk do
-            local virt = UIS.VirtualUser
-            if virt then
-                virt:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                task.wait(0.1)
-                virt:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-            end
-            task.wait(60)
         end
     end)
 end
@@ -217,8 +215,8 @@ end})
 
 Misc:CreateSection("Player")
 Misc:CreateToggle({Name="Anti-AFK",CurrentValue=CFG.AntiAfk,Callback=function(v)
+    -- Não precisamos mais iniciar um loop. O evento LP.Idled faz tudo automaticamente de acordo com o valor no CFG!
     CFG.AntiAfk=v Save()
-    if v then StartAntiAfk() end
 end})
 
 -- Boot: reinicia loops que estavam ativos no save
@@ -226,4 +224,3 @@ if CFG.AutoBuy then StartAutoBuy() end
 if CFG.AutoCollect then StartAutoCollect() end
 if CFG.AutoCollectIndex then StartAutoCollectIndex() end
 if CFG.AutoUpgrade then StartAutoUpgrade() end
-if CFG.AntiAfk then StartAntiAfk() end
